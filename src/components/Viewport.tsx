@@ -69,4 +69,3 @@ export const Viewport: React.FC<ViewportProps> = ({
     </div>
   );
 };
-</parameter>

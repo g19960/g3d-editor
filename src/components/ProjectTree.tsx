@@ -162,4 +162,3 @@ export const ProjectTree: React.FC<ProjectTreeProps> = ({
     </div>
   );
 };
-</parameter>

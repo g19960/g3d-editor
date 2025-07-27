@@ -427,4 +427,3 @@ export const useThreeJS = (containerRef: React.RefObject<HTMLDivElement>) => {
     assistantMode,
   };
 };
-</parameter>

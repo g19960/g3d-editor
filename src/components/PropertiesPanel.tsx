@@ -233,4 +233,3 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     </div>
   );
 };
-</parameter>

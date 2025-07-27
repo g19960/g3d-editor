@@ -138,4 +138,3 @@ export const ModelToolPanel: React.FC<ModelToolPanelProps> = ({
     </div>
   );
 };
-</parameter>
