@@ -14,9 +14,11 @@ function App() {
     updateModelProperty,
     selectModel,
     toggleAssistantMode,
+    toggleCameraMode,
     models,
     selectedModel,
     assistantMode,
+    cameraMode,
   } = useThreeJS(containerRef);
 
   const handleUndo = () => {
@@ -89,6 +91,8 @@ function App() {
         onImport={handleImport}
         assistantMode={assistantMode}
         onToggleAssistantMode={toggleAssistantMode}
+        cameraMode={cameraMode}
+        onToggleCameraMode={toggleCameraMode}
       />
       
       <div className="flex flex-1 overflow-hidden">
@@ -108,6 +112,7 @@ function App() {
           containerRef={containerRef}
           assistantMode={assistantMode}
           selectedModel={selectedModel}
+          cameraMode={cameraMode}
         />
         
         <PropertiesPanel

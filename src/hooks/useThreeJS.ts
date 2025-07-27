@@ -13,10 +13,16 @@ export const useThreeJS = (containerRef: React.RefObject<HTMLDivElement>) => {
   const [selectedModel, setSelectedModel] = useState<ModelObject | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [assistantMode, setAssistantMode] = useState(false);
+  const [cameraMode, setCameraMode] = useState<'orbit' | 'free'>('orbit');
   
   const animationFrameRef = useRef<number>();
   const dragPlaneRef = useRef<THREE.Plane>();
   const dragOffsetRef = useRef<THREE.Vector3>();
+  
+  // 自由视角摄像机控制变量
+  const keysPressed = useRef<Set<string>>(new Set());
+  const cameraVelocity = useRef<THREE.Vector3>(new THREE.Vector3());
+  const cameraDirection = useRef<THREE.Vector3>(new THREE.Vector3());
 
   // 初始化场景
   useEffect(() => {
@@ -74,12 +80,23 @@ export const useThreeJS = (containerRef: React.RefObject<HTMLDivElement>) => {
     let isMouseDown = false;
     let mouseX = 0;
     let mouseY = 0;
-    let cameraDistance = 8.66;
+    let cameraDistance = 10;
     let cameraTheta = Math.PI / 4;
     let cameraPhi = Math.PI / 4;
+    
+    // 自由视角摄像机变量
+    let mouseSensitivity = 0.002;
+    let moveSpeed = 0.1;
+    let isPointerLocked = false;
 
     // 鼠标事件处理
     const handleMouseDown = (event: MouseEvent) => {
+      if (cameraMode === 'free') {
+        // 自由视角模式下请求指针锁定
+        renderer.domElement.requestPointerLock();
+        return;
+      }
+      
       if (!mouseRef.current || !raycasterRef.current || !cameraRef.current) return;
 
       const rect = renderer.domElement.getBoundingClientRect();
@@ -117,6 +134,29 @@ export const useThreeJS = (containerRef: React.RefObject<HTMLDivElement>) => {
     };
 
     const handleMouseMove = (event: MouseEvent) => {
+      if (cameraMode === 'free' && isPointerLocked) {
+        // 自由视角鼠标移动
+        const movementX = event.movementX || 0;
+        const movementY = event.movementY || 0;
+        
+        cameraTheta -= movementX * mouseSensitivity;
+        cameraPhi = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, cameraPhi - movementY * mouseSensitivity));
+        
+        // 更新相机朝向
+        cameraDirection.current.set(
+          Math.cos(cameraPhi) * Math.sin(cameraTheta),
+          Math.sin(cameraPhi),
+          Math.cos(cameraPhi) * Math.cos(cameraTheta)
+        );
+        
+        camera.lookAt(
+          camera.position.x + cameraDirection.current.x,
+          camera.position.y + cameraDirection.current.y,
+          camera.position.z + cameraDirection.current.z
+        );
+        return;
+      }
+      
       if (isDragging && selectedModel && dragPlaneRef.current && raycasterRef.current && cameraRef.current) {
         // 模型拖拽
         const rect = renderer.domElement.getBoundingClientRect();
@@ -152,7 +192,7 @@ export const useThreeJS = (containerRef: React.RefObject<HTMLDivElement>) => {
         return;
       }
 
-      if (!isMouseDown) return;
+      if (!isMouseDown || cameraMode === 'free') return;
 
       // 相机旋转
       const deltaX = event.clientX - mouseX;
@@ -174,11 +214,15 @@ export const useThreeJS = (containerRef: React.RefObject<HTMLDivElement>) => {
 
     const handleWheel = (event: WheelEvent) => {
       event.preventDefault();
-      cameraDistance = Math.max(2, Math.min(50, cameraDistance + event.deltaY * 0.01));
-      updateCameraPosition();
+      if (cameraMode === 'orbit') {
+        cameraDistance = Math.max(2, Math.min(50, cameraDistance + event.deltaY * 0.01));
+        updateCameraPosition();
+      }
     };
 
     const updateCameraPosition = () => {
+      if (cameraMode === 'free') return;
+      
       const x = cameraDistance * Math.sin(cameraPhi) * Math.cos(cameraTheta);
       const y = cameraDistance * Math.cos(cameraPhi);
       const z = cameraDistance * Math.sin(cameraPhi) * Math.sin(cameraTheta);
@@ -186,16 +230,75 @@ export const useThreeJS = (containerRef: React.RefObject<HTMLDivElement>) => {
       camera.position.set(x, y, z);
       camera.lookAt(0, 0, 0);
     };
+    
+    // 键盘事件处理
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (cameraMode === 'free') {
+        keysPressed.current.add(event.code);
+        
+        // ESC键退出指针锁定
+        if (event.code === 'Escape') {
+          document.exitPointerLock();
+        }
+      }
+    };
+    
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (cameraMode === 'free') {
+        keysPressed.current.delete(event.code);
+      }
+    };
+    
+    // 指针锁定事件
+    const handlePointerLockChange = () => {
+      isPointerLocked = document.pointerLockElement === renderer.domElement;
+    };
 
     // 添加事件监听器
     renderer.domElement.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
     renderer.domElement.addEventListener('wheel', handleWheel);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    document.addEventListener('pointerlockchange', handlePointerLockChange);
 
     // 动画循环
     const animate = () => {
       animationFrameRef.current = requestAnimationFrame(animate);
+      
+      // 自由视角摄像机移动
+      if (cameraMode === 'free' && isPointerLocked) {
+        const forward = new THREE.Vector3();
+        const right = new THREE.Vector3();
+        const up = new THREE.Vector3(0, 1, 0);
+        
+        camera.getWorldDirection(forward);
+        right.crossVectors(forward, up).normalize();
+        
+        cameraVelocity.current.set(0, 0, 0);
+        
+        if (keysPressed.current.has('KeyW')) {
+          cameraVelocity.current.add(forward.multiplyScalar(moveSpeed));
+        }
+        if (keysPressed.current.has('KeyS')) {
+          cameraVelocity.current.add(forward.multiplyScalar(-moveSpeed));
+        }
+        if (keysPressed.current.has('KeyA')) {
+          cameraVelocity.current.add(right.multiplyScalar(-moveSpeed));
+        }
+        if (keysPressed.current.has('KeyD')) {
+          cameraVelocity.current.add(right.multiplyScalar(moveSpeed));
+        }
+        if (keysPressed.current.has('Space')) {
+          cameraVelocity.current.add(up.multiplyScalar(moveSpeed));
+        }
+        if (keysPressed.current.has('ShiftLeft')) {
+          cameraVelocity.current.add(up.multiplyScalar(-moveSpeed));
+        }
+        
+        camera.position.add(cameraVelocity.current);
+      }
       
       // 更新选中模型的视觉效果
       models.forEach(model => {
@@ -232,6 +335,9 @@ export const useThreeJS = (containerRef: React.RefObject<HTMLDivElement>) => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
       renderer.domElement.removeEventListener('wheel', handleWheel);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      document.removeEventListener('pointerlockchange', handlePointerLockChange);
       window.removeEventListener('resize', handleResize);
       
       if (containerRef.current && renderer.domElement.parentNode) {
@@ -239,7 +345,7 @@ export const useThreeJS = (containerRef: React.RefObject<HTMLDivElement>) => {
       }
       renderer.dispose();
     };
-  }, [models, selectedModel, isDragging, assistantMode]);
+  }, [models, selectedModel, isDragging, assistantMode, cameraMode]);
 
   const addModel = useCallback((type: 'cube' | 'sphere' | 'cylinder' | 'plane', category: string = '基础模型') => {
     if (!sceneRef.current) return;
@@ -271,10 +377,11 @@ export const useThreeJS = (containerRef: React.RefObject<HTMLDivElement>) => {
     });
 
     const mesh = new THREE.Mesh(geometry, material);
+    // 默认在中心点上方创建模型
     const position = {
-      x: (Math.random() - 0.5) * 4,
-      y: Math.random() * 2 + 0.5,
-      z: (Math.random() - 0.5) * 4
+      x: 0,
+      y: 1,
+      z: 0
     };
     
     mesh.position.set(position.x, position.y, position.z);
@@ -399,6 +506,21 @@ export const useThreeJS = (containerRef: React.RefObject<HTMLDivElement>) => {
       setModels(prev => prev.map(m => 
         m.id === model.id ? { ...m, isSelected: true } : m
       ));
+      
+      // 将相机聚焦到选中的模型
+      if (cameraRef.current && cameraMode === 'orbit') {
+        const modelPosition = model.mesh.position;
+        const distance = 8;
+        const theta = Math.PI / 4;
+        const phi = Math.PI / 4;
+        
+        const x = modelPosition.x + distance * Math.sin(phi) * Math.cos(theta);
+        const y = modelPosition.y + distance * Math.cos(phi);
+        const z = modelPosition.z + distance * Math.sin(phi) * Math.sin(theta);
+        
+        cameraRef.current.position.set(x, y, z);
+        cameraRef.current.lookAt(modelPosition);
+      }
     } else {
       setSelectedModel(null);
       setAssistantMode(false);
@@ -415,6 +537,25 @@ export const useThreeJS = (containerRef: React.RefObject<HTMLDivElement>) => {
       return newMode;
     });
   }, []);
+  
+  const toggleCameraMode = useCallback(() => {
+    setCameraMode(prev => {
+      const newMode = prev === 'orbit' ? 'free' : 'orbit';
+      
+      if (newMode === 'orbit' && cameraRef.current) {
+        // 切换回轨道模式时重置相机位置
+        cameraRef.current.position.set(5, 5, 5);
+        cameraRef.current.lookAt(0, 0, 0);
+      }
+      
+      // 退出指针锁定
+      if (document.pointerLockElement) {
+        document.exitPointerLock();
+      }
+      
+      return newMode;
+    });
+  }, []);
 
   return {
     addModel,
@@ -422,8 +563,10 @@ export const useThreeJS = (containerRef: React.RefObject<HTMLDivElement>) => {
     updateModelProperty,
     selectModel,
     toggleAssistantMode,
+    toggleCameraMode,
     models,
     selectedModel,
     assistantMode,
+    cameraMode,
   };
 };

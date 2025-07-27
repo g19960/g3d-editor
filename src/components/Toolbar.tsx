@@ -1,5 +1,5 @@
 import React from 'react';
-import { Undo2, Redo2, Save, Download, Upload, Eye, EyeOff } from 'lucide-react';
+import { Undo2, Redo2, Save, Download, Upload, Eye, EyeOff, Camera, Move3D } from 'lucide-react';
 
 interface ToolbarProps {
   onUndo: () => void;
@@ -9,6 +9,8 @@ interface ToolbarProps {
   onImport: () => void;
   assistantMode: boolean;
   onToggleAssistantMode: () => void;
+  cameraMode: 'orbit' | 'free';
+  onToggleCameraMode: () => void;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
@@ -19,6 +21,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onImport,
   assistantMode,
   onToggleAssistantMode,
+  cameraMode,
+  onToggleCameraMode,
 }) => {
   return (
     <div className="bg-gray-800 border-b border-gray-700 px-4 py-2 flex items-center gap-2">
@@ -79,6 +83,19 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         >
           {assistantMode ? <Eye size={16} /> : <EyeOff size={16} />}
           <span>{assistantMode ? '辅助模式' : '辅助模式'}</span>
+        </button>
+        
+        <button
+          onClick={onToggleCameraMode}
+          className={`flex items-center gap-2 px-3 py-1 rounded text-sm font-medium transition-colors ${
+            cameraMode === 'free'
+              ? 'bg-green-600 text-white hover:bg-green-700'
+              : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+          }`}
+          title={cameraMode === 'free' ? '切换到轨道相机' : '切换到自由相机'}
+        >
+          {cameraMode === 'free' ? <Move3D size={16} /> : <Camera size={16} />}
+          <span>{cameraMode === 'free' ? '自由相机' : '轨道相机'}</span>
         </button>
       </div>
       
