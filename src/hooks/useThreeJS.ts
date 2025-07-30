@@ -59,15 +59,26 @@ export const useThreeJS = (containerRef: React.RefObject<HTMLDivElement>) => {
     dragOffsetRef.current = new THREE.Vector3();
 
     // 添加灯光
-    const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+    const ambientLight = new THREE.AmbientLight(0x404040, 0.8);
     scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(10, 10, 5);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    directionalLight.position.set(5, 10, 5);
     directionalLight.castShadow = true;
     directionalLight.shadow.mapSize.width = 2048;
     directionalLight.shadow.mapSize.height = 2048;
+    directionalLight.shadow.camera.near = 0.1;
+    directionalLight.shadow.camera.far = 50;
+    directionalLight.shadow.camera.left = -20;
+    directionalLight.shadow.camera.right = 20;
+    directionalLight.shadow.camera.top = 20;
+    directionalLight.shadow.camera.bottom = -20;
     scene.add(directionalLight);
+    
+    // 添加额外的光源确保模型可见
+    const pointLight = new THREE.PointLight(0xffffff, 0.5, 100);
+    pointLight.position.set(-5, 5, 5);
+    scene.add(pointLight);
 
     // 添加网格和坐标轴
     const gridHelper = new THREE.GridHelper(20, 20, 0x888888, 0x444444);
@@ -304,10 +315,10 @@ export const useThreeJS = (containerRef: React.RefObject<HTMLDivElement>) => {
       models.forEach(model => {
         if (model.isSelected && assistantMode) {
           // 添加选中高亮效果
-          const material = model.mesh.material as THREE.MeshLambertMaterial;
+          const material = model.mesh.material as THREE.MeshPhongMaterial;
           material.emissive.setHex(0x333333);
         } else {
-          const material = model.mesh.material as THREE.MeshLambertMaterial;
+          const material = model.mesh.material as THREE.MeshPhongMaterial;
           material.emissive.setHex(0x000000);
         }
       });
@@ -355,38 +366,44 @@ export const useThreeJS = (containerRef: React.RefObject<HTMLDivElement>) => {
 
     switch (type) {
       case 'cube':
-        geometry = new THREE.BoxGeometry(1, 1, 1);
+        geometry = new THREE.BoxGeometry(2, 2, 2);
         name = `立方体模型 ${models.length + 1}`;
         break;
       case 'sphere':
-        geometry = new THREE.SphereGeometry(0.5, 32, 32);
+        geometry = new THREE.SphereGeometry(1, 32, 32);
         name = `球体模型 ${models.length + 1}`;
         break;
       case 'cylinder':
-        geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 32);
+        geometry = new THREE.CylinderGeometry(1, 1, 2, 32);
         name = `圆柱体模型 ${models.length + 1}`;
         break;
       case 'plane':
-        geometry = new THREE.PlaneGeometry(2, 2);
+        geometry = new THREE.PlaneGeometry(4, 4);
         name = `平面模型 ${models.length + 1}`;
         break;
     }
 
-    const material = new THREE.MeshLambertMaterial({
-      color: Math.random() * 0xffffff,
+    const material = new THREE.MeshPhongMaterial({
+      color: new THREE.Color().setHSL(Math.random(), 0.7, 0.6),
+      shininess: 30,
     });
 
     const mesh = new THREE.Mesh(geometry, material);
-    // 默认在中心点上方创建模型
+    // 在中心点上方创建模型，确保可见
     const position = {
       x: 0,
-      y: 1,
+      y: type === 'plane' ? 0 : 2,
       z: 0
     };
     
     mesh.position.set(position.x, position.y, position.z);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
+    
+    // 确保平面朝上
+    if (type === 'plane') {
+      mesh.rotation.x = -Math.PI / 2;
+    }
 
     const modelObject: ModelObject = {
       id: `${type}_${Date.now()}`,
@@ -398,7 +415,11 @@ export const useThreeJS = (containerRef: React.RefObject<HTMLDivElement>) => {
       isAssistantMode: false,
       properties: {
         position,
-        rotation: { x: 0, y: 0, z: 0 },
+        rotation: { 
+          x: type === 'plane' ? -Math.PI / 2 : 0, 
+          y: 0, 
+          z: 0 
+        },
         scale: { x: 1, y: 1, z: 1 },
         color: `#${material.color.getHexString()}`,
       },
@@ -406,6 +427,11 @@ export const useThreeJS = (containerRef: React.RefObject<HTMLDivElement>) => {
 
     sceneRef.current.add(mesh);
     setModels(prev => [...prev, modelObject]);
+    
+    // 自动选中新创建的模型
+    setTimeout(() => {
+      selectModel(modelObject);
+    }, 100);
   }, [models]);
 
   const deleteModel = useCallback((id: string) => {
@@ -462,7 +488,7 @@ export const useThreeJS = (containerRef: React.RefObject<HTMLDivElement>) => {
         model.mesh.scale.z = value;
         break;
       case 'color':
-        (model.mesh.material as THREE.MeshLambertMaterial).color.setHex(parseInt(value.replace('#', '0x')));
+        (model.mesh.material as THREE.MeshPhongMaterial).color.setHex(parseInt(value.replace('#', '0x')));
         break;
     }
 
@@ -510,7 +536,7 @@ export const useThreeJS = (containerRef: React.RefObject<HTMLDivElement>) => {
       // 将相机聚焦到选中的模型
       if (cameraRef.current && cameraMode === 'orbit') {
         const modelPosition = model.mesh.position;
-        const distance = 8;
+        const distance = 10;
         const theta = Math.PI / 4;
         const phi = Math.PI / 4;
         

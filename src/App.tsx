@@ -113,6 +113,7 @@ function App() {
           assistantMode={assistantMode}
           selectedModel={selectedModel}
           cameraMode={cameraMode}
+          models={models}
         />
         
         <PropertiesPanel
