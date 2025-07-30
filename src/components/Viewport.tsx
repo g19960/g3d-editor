@@ -47,6 +47,9 @@ export const Viewport: React.FC<ViewportProps> = ({
       <div className="absolute bottom-4 left-4 bg-black bg-opacity-75 text-white text-xs p-3 rounded-lg">
         <div className="space-y-1">
           <div>模型总数: {models?.length || 0}</div>
+          {models && models.length > 0 && (
+            <div>最新模型: {models[models.length - 1]?.name}</div>
+          )}
           {cameraMode === 'orbit' ? (
             <>
               <div>鼠标拖拽：旋转视角</div>
